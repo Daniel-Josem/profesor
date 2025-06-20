@@ -358,3 +358,70 @@ body {
         max-width: 100px; /* Reduce max-width for smaller screens */
     }
 }
+/* --- Nuevos estilos para reordenar Notificaciones y Perfil con CSS --- */
+
+/* Asegura que el contenedor de los dropdowns es un flex container */
+.top-profile-dropdown {
+    display: flex; /* Asegura que es un contenedor flex */
+    justify-content: flex-end; /* Mantiene los elementos a la derecha */
+    align-items: center;
+    padding-right: 15px; /* Ya estaba, lo mantengo */
+}
+
+/* Aplica 'order' para cambiar el orden visual */
+/* Elemento de Notificaciones (el primer dropdown en tu HTML) */
+.top-profile-dropdown > .nav-item.dropdown:first-child {
+    order: 1; /* Le da un orden de 1 (primero) */
+    margin-right: 15px; /* Espacio a la derecha para separar del perfil */
+}
+
+/* Elemento del Perfil (el segundo dropdown en tu HTML) */
+.top-profile-dropdown > .dropdown:last-child {
+    order: 2; /* Le da un orden de 2 (segundo) */
+    /* No necesitamos margin-left aquí si el margin-right está en el de notificaciones */
+}
+
+/* Ajustes para el botón de perfil para que se vea como un nav-link de Bootstrap */
+.top-profile-dropdown .dropdown > .d-flex { /* Selecciona el <a> dentro del .dropdown de perfil */
+    background-color: green; /* Color de fondo para el botón de perfil */
+    color: white; /* Color del texto del perfil */
+    padding: 8px 12px; /* Padding del botón */
+    border-radius: 25px; /* Bordes redondeados */
+    transition: background-color 0.2s ease;
+}
+
+.top-profile-dropdown .dropdown > .d-flex:hover {
+    background-color: #dee2e6; /* Hover effect */
+    color: #343a40; /* Cambia el color del texto al pasar el ratón si es necesario */
+}
+
+.top-profile-dropdown .dropdown > .d-flex i {
+    color: white; /* Asegura que el icono también sea blanco */
+}
+
+/* Estilos específicos para el dropdown de notificaciones que ya tenías */
+.notification-button { /* Tus estilos existentes para el botón de notificaciones */
+    margin-right: 15px; /* Ya estaba, mantenlo */
+    text-decoration: none;
+    color: #343a40; /* Esto puede ser sobrescrito por nav-link, revisa */
+    font-size: 1.5rem;
+}
+
+.notification-button .badge {
+    vertical-align: top;
+    font-size: 0.7em;
+    padding: 0.35em 0.6em;
+    border-radius: 0.5rem;
+}
+
+/* Asegurarse de que el color del texto de Notificaciones sea el correcto */
+.top-profile-dropdown .nav-item.dropdown:first-child .nav-link {
+    color: black; /* O el color que desees para el texto "Notificaciones" */
+    background-color: transparent; /* Si quieres que no tenga un fondo como el de perfil */
+    padding: 8px 12px; /* Un padding similar para alineación */
+    border-radius: 25px; /* Para que sea consistente */
+}
+
+.top-profile-dropdown .nav-item.dropdown:first-child .nav-link:hover {
+    background-color: #f0f0f0; /* Un hover light */
+}
