@@ -1,21 +1,23 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, jsonify, abort
 import sqlite3, os
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
-from datetime import datetime
+from datetime import datetime ,timedelta
 
 app = Flask(__name__)
 app.secret_key = 'tu_clave_secreta_muy_segura_aqui' # ¡CAMBIA ESTO EN PRODUCCIÓN!
 DATABASE = 'gestor_tareas.db' # Renombrado para mayor claridad
 UPLOAD_FOLDER = 'static/uploads/archivos_tareas'
 AVATAR_FOLDER = 'static/uploads/avatars' # Nuevo folder para avatares
+UPLOAD_FOLDER = os.path.join('static', 'uploads')
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Asegurar que los directorios de carga existan
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(AVATAR_FOLDER, exist_ok=True)
 
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['AVATAR_FOLDER'] = AVATAR_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # Max upload size: 16 MB
 
@@ -29,6 +31,7 @@ def get_db_connection():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def init_db():
     conn = get_db_connection()
@@ -194,7 +197,6 @@ def init_db():
         ))
         print("Usuario 'estudiante3' (Ana Torres, Curso 7B) creado.")
 
-
     conn.commit()
     conn.close()
 
@@ -359,6 +361,10 @@ def profesor(): # Cambiado el nombre de la función para ser consistente con el 
                            estado=estado_filtro,
                            curso_filtro=curso_filtro,
                            current_user=current_user)
+
+@app.route('/uploads/<filename>')
+def servir_archivo(filename):  # Nombre diferente
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
 @app.route('/api/estudiantes_por_curso/<curso>')
@@ -589,45 +595,88 @@ def eliminar_tarea(id):
         conn.close()
     return redirect(url_for('profesor'))
 
+app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'uploads')
+
 @app.route('/descargar_archivo/<filename>')
-@login_required
 def descargar_archivo(filename):
-    # Verificar si el archivo pertenece a una tarea del profesor o si es un administrador
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+# --- Ruta para OBTENER notificaciones ---
+@app.route('/api/notificaciones/no_leidas_count', methods=['GET'])
+@login_required
+def get_notificaciones_no_leidas_count():
+    """
+    Devuelve el número de notificaciones no leídas para el usuario actual.
+    Esta función interactúa con la base de datos real.
+    """
     conn = get_db_connection()
-    task_owner = conn.execute('SELECT profesor_id FROM tareas WHERE ruta_archivo = ?', (filename,)).fetchone()
-    conn.close()
-
-    is_allowed = False
-    if task_owner and task_owner['profesor_id'] == current_user.id:
-        is_allowed = True
-    elif current_user.rol == 'rol_administrador':
-        is_allowed = True
-    # Permitir a los usuarios regulares descargar archivos si están asociados a su curso
-    elif current_user.rol == 'rol_usuario':
-        conn = get_db_connection()
-        user_course = current_user.curso
-        task_in_course = conn.execute('SELECT 1 FROM tareas WHERE ruta_archivo = ? AND curso_destino = ?', (filename, user_course)).fetchone()
+    try:
+        # Asegúrate de que tu tabla se llama 'notificaciones' y las columnas 'id_usuario' y 'leido'
+        count = conn.execute(
+            'SELECT COUNT(*) FROM notificaciones WHERE id_usuario = ? AND leido = 0',
+            (current_user.id,)
+        ).fetchone()[0]
+        return jsonify({"count": count})
+    except Exception as e:
+        print(f"Error al obtener el conteo de notificaciones no leídas: {e}")
+        return jsonify({"error": f"Error interno del servidor al obtener el conteo: {e}"}), 500
+    finally:
         conn.close()
-        if task_in_course:
-            is_allowed = True
 
-    if is_allowed:
-        try:
-            return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
-        except FileNotFoundError:
-            flash('El archivo no fue encontrado.', 'danger')
-            if current_user.rol == 'rol_profesor':
-                return redirect(url_for('profesor'))
-            elif current_user.rol == 'rol_usuario':
-                return redirect(url_for('rol_usuario'))
-            return redirect(url_for('index'))
-    else:
-        flash('No tienes permiso para descargar este archivo.', 'danger')
-        if current_user.rol == 'rol_profesor':
-            return redirect(url_for('profesor'))
-        elif current_user.rol == 'rol_usuario':
-            return redirect(url_for('rol_usuario'))
-        return redirect(url_for('index'))
+# 2. Ruta para obtener la LISTA COMPLETA de notificaciones (USANDO DATOS DE PRUEBA)
+@app.route('/api/notificaciones', methods=['GET'])
+@login_required
+def get_notificaciones(): # Nombre de función ÚNICO para esta ruta
+    """
+    Devuelve una lista de notificaciones de PRUEBA.
+    Esta función SIMULA datos para facilitar el desarrollo del frontend.
+    Cuando estés listo para usar tu base de datos real, reemplaza este contenido
+    con la lógica que consulte tu tabla 'notificaciones'.
+    """
+    notificaciones_prueba = [
+        {
+            'id': 1,
+            'mensaje': 'Tienes una nueva tarea asignada: "Proyecto Final de Matemáticas".',
+            'fecha': (datetime.now() - timedelta(minutes=5)).isoformat(), # Hace 5 minutos
+            'leida': False
+        },
+        {
+            'id': 2,
+            'mensaje': 'El estudiante Juan Pérez ha entregado la Tarea 3.',
+            'fecha': (datetime.now() - timedelta(hours=2)).isoformat(), # Hace 2 horas
+            'leida': False
+        },
+        {
+            'id': 3,
+            'mensaje': 'Recordatorio: La reunión de profesores es mañana a las 10 AM.',
+            'fecha': (datetime.now() - timedelta(days=1)).isoformat(), # Hace 1 día
+            'leida': True # Esta se muestra como leída
+        },
+        {
+            'id': 4,
+            'mensaje': 'Se ha actualizado el calendario académico 2025-2026.',
+            'fecha': (datetime.now() - timedelta(days=3, hours=10)).isoformat(), # Hace 3 días y 10 horas
+            'leida': False
+        }
+    ]
+    return jsonify(notificaciones_prueba)
+
+# 3. Ruta para MARCAR notificaciones como LEÍDAS (USANDO SIMULACIÓN)
+@app.route('/api/notificaciones/marcar_leidas', methods=['POST'])
+@login_required
+def marcar_notificaciones_leidas(): # Nombre de función ÚNICO para esta ruta
+    """
+    Simula el marcado de notificaciones como leídas.
+    Esta función NO interactúa con la base de datos real.
+    Cuando estés listo, reemplaza este contenido con la lógica para actualizar tu DB.
+    """
+    data = request.get_json()
+    ids_a_marcar = data.get('ids', [])
+    print(f"Marcando notificaciones como leídas (TEST): {ids_a_marcar}")
+    # En un entorno real, aquí actualizarías tu base de datos (Ej: un UPDATE)
+    return jsonify({"message": "Notificaciones marcadas como leídas (simulado)", "marked_ids": ids_a_marcar}), 200
+
 
 
 # API para obtener una tarea por ID (para edición)
@@ -797,9 +846,7 @@ def logout():
     return redirect(url_for('login')) # Redirige al login
 
 # Rutas para servir archivos estáticos cargados
-@app.route('/static/uploads/archivos_tareas/<filename>')
-def serve_task_files(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
 
 @app.route('/static/uploads/avatars/<filename>')
 def serve_avatars(filename):
